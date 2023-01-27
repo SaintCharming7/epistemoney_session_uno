@@ -1,0 +1,608 @@
+#project 1
+#Title: Testing the 'best' sectors to invest in heading into 2023. A Portfolio analysis using R. 
+#Packages 2 install
+#install.packages("quantmod")
+#install.packages("PerformanceAnalytics")
+#install.packages("dygraphs")
+
+library(quantmod)
+library(PerformanceAnalytics)
+library(dygraphs)
+library(corrplot)
+library(RColorBrewer)
+library(Hmisc)
+library(ggplot2)
+library(gridExtra)
+
+# specially designed background for ggplot(s)
+theme_set(
+  theme_minimal() +
+    theme(panel.grid.major = element_line(color = "gray88", size = 0.5),
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor = element_blank(),
+          line = element_blank())
+)
+
+#we use the getSymbols code to download data from Yahoo! Finance
+#telecommunications
+tmobile <- getSymbols("TMUS", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+abbvie <- getSymbols("ABBV", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+service_now <- getSymbols("NOW", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+verizon <- getSymbols("VZ", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+
+stock_data <- data.frame(tmobile$`TMUS.Close`, abbvie$`ABBV.Close`, service_now$`NOW.Close`, verizon$`VZ.Close`)
+stock_Price = as.matrix( stock_data[ , 1:4] )
+
+# This function returns the first differences of a t x q matrix of data
+returns = function(Y){
+  len = nrow(Y)
+  yDif = Y[2:len, ] / Y[1:len-1, ] - 1
+}
+
+# Get the Stock Returns
+stock_Returns = returns(stock_Price)
+str(stock_Returns)
+
+
+
+#Building a correlation matrix to check the correlation of the returns of stocks 
+M1 <-cor(stock_Returns)
+M1
+
+
+# Produce interactive chart of stock returns
+uno <- dygraph(stock_Returns, main = "") %>%
+  dyAxis("y", label = "Return", valueRange = c(-1,0.5)) %>%
+  dyRangeSelector(dateWindow = c("2022-10-01", "2022-12-30")) %>%
+  dyOptions(colors = RColorBrewer::brewer.pal(4, "Set2"))
+
+uno
+
+# Monte Carlo 
+
+mc_rep = 1000 # Number of Monte Carlo Simulations
+training_days = 100
+
+
+# Suppose we invest our money evenly among all four assets 
+# We use the prices to find the number of shares each stock that we buy
+portfolio_Weights = t(as.matrix(rep(1/ncol(stock_Returns), ncol(stock_Returns))))
+print(portfolio_Weights)
+
+# Get the Variance Covariance Matrix of Stock Returns
+coVarMat = cov(stock_Returns)
+miu = colMeans(stock_Returns)
+# Extend the vector to a matrix
+Miu = matrix(rep(miu, training_days), nrow = 4)
+
+# Initializing simulated 110 day portfolio returns
+portfolio_Returns_100_m = matrix(0, training_days, mc_rep)
+
+set.seed(200)
+for (i in 1:mc_rep) {
+  Z = matrix ( rnorm( dim(stock_Returns)[2] * training_days ), ncol = training_days )
+  # Lower Triangular Matrix from our Choleski Factorization
+  L = t( chol(coVarMat) )
+  # Calculate stock returns for each day
+  daily_Returns = Miu + L %*% Z  
+  # Calculate portfolio returns for 100 days
+  portfolio_Returns_100 = cumprod( portfolio_Weights %*% daily_Returns + 1 )
+  # Add it to the monte-carlo matrix
+  portfolio_Returns_100_m[,i] = portfolio_Returns_100;
+}
+
+# Visualising result
+x_axis = rep(1:training_days, mc_rep)
+y_axis = as.vector(portfolio_Returns_100_m-1)
+plot_data = data.frame(x_axis, y_axis)
+mc1 <- ggplot(data = plot_data, aes(x = x_axis, y = y_axis)) + geom_path(col = 'darkblue', size = 0.1) +
+  xlab('Days') + ylab('Portfolio Returns') + 
+  ggtitle('Telecommunications')+
+  theme(plot.title = element_text(hjust = 0.5))
+mc1
+
+# Porfolio Returns statistics on the 100th day.
+Avg_Portfolio_Returns = mean(portfolio_Returns_100_m[100,]-1)
+SD_Portfolio_Returns = sd(portfolio_Returns_100_m[100,]-1)
+Median_Portfolio_Returns = median(portfolio_Returns_100_m[100,]-1)
+print(c(Avg_Portfolio_Returns,SD_Portfolio_Returns,Median_Portfolio_Returns))
+
+# calculating the standard error
+sample.n <- length(portfolio_Returns_100_m[100,]-1)
+sample.se <-SD_Portfolio_Returns/sqrt(sample.n)
+print(sample.se)
+
+# calculating the t score
+
+alpha = 0.05
+degrees.freedom = sample.n - 1
+t.score = qt(p=alpha/2, df=degrees.freedom, lower.tail=F)
+
+print(t.score)
+
+
+# Marging of error
+
+margin.error <- t.score * sample.se
+
+# confidence +-
+
+lower.bound <- Avg_Portfolio_Returns - margin.error
+upper.bound <- Avg_Portfolio_Returns + margin.error
+
+print(c(lower.bound, upper.bound))
+
+###
+
+
+#internet services
+
+sp_global <- getSymbols("SPGI", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+moodys <- getSymbols("MCO", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+msci <- getSymbols("MSCI", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+ice <- getSymbols("ICE", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+
+stock_data2 <- data.frame(sp_global$`SPGI.Close`, moodys$`MCO.Close`, msci$`MSCI.Close`, ice$`ICE.Close`)
+stock_Price2 = as.matrix( stock_data2[ , 1:4] )
+ 
+
+# Get the Stock Returns
+stock_Returns2 = returns(stock_Price2)
+
+# Produce interactive chart of stock returns
+dos <- dygraph(stock_Returns2, main = "") %>%
+  dyAxis("y", label = "Return", valueRange = c(-1,0.5)) %>%
+  dyRangeSelector(dateWindow = c("2022-10-01", "2022-12-30")) %>%
+  dyOptions(colors = RColorBrewer::brewer.pal(4, "Set2")) 
+
+M2 <-cor(stock_Returns2)
+M2
+
+
+# Monte Carlo
+
+# Suppose we invest our money evenly among all four assets 
+# We use the prices to find the number of shares each stock that we buy
+portfolio_Weights2 = t(as.matrix(rep(1/ncol(stock_Returns2), ncol(stock_Returns2))))
+print(portfolio_Weights2)
+
+# Get the Variance Covariance Matrix of Stock Returns
+coVarMat2 = cov(stock_Returns2)
+miu2 = colMeans(stock_Returns2)
+# Extend the vector to a matrix
+Miu2 = matrix(rep(miu2, training_days), nrow = 4)
+
+# Initializing simulated 110 day portfolio returns
+portfolio_Returns_100_m2 = matrix(0, training_days, mc_rep)
+
+#set.seed(200)
+for (i in 1:mc_rep) {
+  Z2 = matrix ( rnorm( dim(stock_Returns2)[2] * training_days ), ncol = training_days )
+  # Lower Triangular Matrix from our Choleski Factorization
+  L2 = t( chol(coVarMat2) )
+  # Calculate stock returns for each day
+  daily_Returns2 = Miu2 + L2 %*% Z2  
+  # Calculate portfolio returns for 100 days
+  portfolio_Returns_100b = cumprod( portfolio_Weights2 %*% daily_Returns2 + 1 )
+  # Add it to the monte-carlo matrix
+  portfolio_Returns_100_m2[,i] = portfolio_Returns_100b;
+}
+
+# Visualising result
+x_axis = rep(1:training_days, mc_rep)
+y_axis2 = as.vector(portfolio_Returns_100_m2-1)
+plot_data2 = data.frame(x_axis, y_axis2)
+mc2 <- ggplot(data = plot_data2, aes(x = x_axis, y = y_axis2)) + geom_path(col = 'darkmagenta', size = 0.1) +
+  xlab('Days') + ylab('Portfolio Returns') + 
+  ggtitle('Internet Services')+
+  theme(plot.title = element_text(hjust = 0.5))
+mc2
+
+# Porfolio Returns statistics on the 30th day.
+Avg_Portfolio_Returns2 = mean(portfolio_Returns_100_m2[100,]-1)
+SD_Portfolio_Returns2 = sd(portfolio_Returns_100_m2[100,]-1)
+Median_Portfolio_Returns2 = median(portfolio_Returns_100_m2[100,]-1)
+print(c(Avg_Portfolio_Returns2,SD_Portfolio_Returns2,Median_Portfolio_Returns2))
+
+# calculating the standard error
+sample.n2 <- length(portfolio_Returns_100_m2[100,]-1)
+sample.se2 <-SD_Portfolio_Returns2/sqrt(sample.n2)
+print(sample.se2)
+
+# calculating the t score
+
+#alpha = 0.05
+degrees.freedom2 = sample.n2 - 1
+t.score2 = qt(p=alpha/2, df=degrees.freedom2, lower.tail=F)
+
+print(t.score2)
+
+# Marging of error
+
+margin.error2 <- t.score2 * sample.se2
+
+# confidence +-
+
+lower.bound2 <- Avg_Portfolio_Returns2 - margin.error2
+upper.bound2 <- Avg_Portfolio_Returns2 + margin.error2
+
+print(c(lower.bound2, upper.bound2))
+
+#specialty distribution
+
+alibaba <- getSymbols("BABA", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+sea_limited <- getSymbols("SE", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+vipshop <- getSymbols("VIPS", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+carvana <- getSymbols("CVNA", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+
+
+stock_data3 <- data.frame(alibaba$`BABA.Close`, sea_limited$`SE.Close`, vipshop$`VIPS.Close`, carvana$`CVNA.Close`)
+stock_Price3 = as.matrix( stock_data3[ , 1:4] )
+
+
+# Get the Stock Returns
+stock_Returns3 = returns(stock_Price3)
+
+# Produce interactive chart of stock returns
+tres <- dygraph(stock_Returns3, main = "") %>%
+  dyAxis("y", label = "Return", valueRange = c(-1,0.5)) %>%
+  dyRangeSelector(dateWindow = c("2022-10-01", "2022-12-30")) %>%
+  dyOptions(colors = RColorBrewer::brewer.pal(4, "Set2"))
+
+M3 <-cor(stock_Returns3)
+M3
+
+
+# Monte Carlo 3
+
+# Suppose we invest our money evenly among all four assets 
+# We use the prices to find the number of shares each stock that we buy
+portfolio_Weights3 = t(as.matrix(rep(1/ncol(stock_Returns3), ncol(stock_Returns3))))
+print(portfolio_Weights3)
+
+# Get the Variance Covariance Matrix of Stock Returns
+coVarMat3 = cov(stock_Returns3)
+miu3 = colMeans(stock_Returns3)
+# Extend the vector to a matrix
+Miu3 = matrix(rep(miu3, training_days), nrow = 4)
+
+# Initializing simulated 110 day portfolio returns
+portfolio_Returns_100_m3 = matrix(0, training_days, mc_rep)
+
+#set.seed(200)
+for (i in 1:mc_rep) {
+  Z3 = matrix ( rnorm( dim(stock_Returns3)[2] * training_days ), ncol = training_days )
+  # Lower Triangular Matrix from our Choleski Factorization
+  L3 = t( chol(coVarMat3) )
+  # Calculate stock returns for each day
+  daily_Returns3 = Miu3 + L3 %*% Z3  
+  # Calculate portfolio returns for 100 days
+  portfolio_Returns_100c = cumprod( portfolio_Weights3 %*% daily_Returns3 + 1 )
+  # Add it to the monte-carlo matrix
+  portfolio_Returns_100_m3[,i] = portfolio_Returns_100c;
+}
+
+# Visualising result
+x_axis = rep(1:training_days, mc_rep)
+y_axis3 = as.vector(portfolio_Returns_100_m3-1)
+plot_data3 = data.frame(x_axis, y_axis3)
+mc3 <- ggplot(data = plot_data3, aes(x = x_axis, y = y_axis3)) + geom_path(col ="darkorange", size = 0.1) +
+  xlab('Days') + ylab('Portfolio Returns') + 
+  ggtitle('Specialties')+
+  theme(plot.title = element_text(hjust = 0.5))
+
+mc3
+
+# Porfolio Returns statistics on the 30th day.
+Avg_Portfolio_Returns3 = mean(portfolio_Returns_100_m3[100,]-1)
+SD_Portfolio_Returns3 = sd(portfolio_Returns_100_m3[100,]-1)
+Median_Portfolio_Returns3 = median(portfolio_Returns_100_m3[100,]-1)
+print(c(Avg_Portfolio_Returns3,SD_Portfolio_Returns3,Median_Portfolio_Returns3))
+
+# calculating the standard error
+sample.n3 <- length(portfolio_Returns_100_m3[100,]-1)
+sample.se3 <-SD_Portfolio_Returns3/sqrt(sample.n3)
+print(sample.se3)
+
+# calculating the t score
+
+#alpha = 0.05
+degrees.freedom3 = sample.n3 - 1
+t.score3 = qt(p=alpha/2, df=degrees.freedom3, lower.tail=F)
+
+print(t.score3)
+
+# Marging of error
+
+margin.error3 <- t.score3 * sample.se3
+
+# confidence +-
+
+lower.bound3 <- Avg_Portfolio_Returns3 - margin.error3
+upper.bound3 <- Avg_Portfolio_Returns3 + margin.error3
+
+print(c(lower.bound3, upper.bound3))
+
+#Oil & Gas
+
+exxon <- getSymbols("XOM", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+chevron <- getSymbols("CVX", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+bp <- getSymbols("BP", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+petrobras <- getSymbols("PBR", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+
+stock_data4 <- data.frame(exxon$`XOM.Close`, chevron$`CVX.Close`, bp$`BP.Close`, petrobras$`PBR.Close`)
+stock_Price4 = as.matrix( stock_data4[ , 1:4] )
+
+
+# Get the Stock Returns
+stock_Returns4 = returns(stock_Price4)
+
+# Produce interactive chart of stock returns
+qatre <- dygraph(stock_Returns4, main = "") %>%
+  dyAxis("y", label = "Return", valueRange = c(-1,0.5)) %>%
+  dyRangeSelector(dateWindow = c("2022-10-01", "2022-12-30")) %>%
+  dyOptions(colors = RColorBrewer::brewer.pal(4, "Set2"))
+qatre
+
+M4 <-cor(stock_Returns4)
+M4
+
+# Monte Carlo 4
+
+# Suppose we invest our money evenly among all four assets 
+# We use the prices to find the number of shares each stock that we buy
+portfolio_Weights4 = t(as.matrix(rep(1/ncol(stock_Returns4), ncol(stock_Returns4))))
+print(portfolio_Weights4)
+
+# Get the Variance Covariance Matrix of Stock Returns
+coVarMat4 = cov(stock_Returns4)
+miu4 = colMeans(stock_Returns4)
+# Extend the vector to a matrix
+Miu4 = matrix(rep(miu4, training_days), nrow = 4)
+
+# Initializing simulated 110 day portfolio returns
+portfolio_Returns_100_m4 = matrix(0, training_days, mc_rep)
+
+#set.seed(200)
+for (i in 1:mc_rep) {
+  Z4 = matrix ( rnorm( dim(stock_Returns4)[2] * training_days ), ncol = training_days )
+  # Lower Triangular Matrix from our Choleski Factorization
+  L4 = t( chol(coVarMat4) )
+  # Calculate stock returns for each day
+  daily_Returns4 = Miu4 + L4 %*% Z4  
+  # Calculate portfolio returns for 100 days
+  portfolio_Returns_100d = cumprod( portfolio_Weights4 %*% daily_Returns4 + 1 )
+  # Add it to the monte-carlo matrix
+  portfolio_Returns_100_m4[,i] = portfolio_Returns_100d;
+}
+
+# Visualising result
+x_axis = rep(1:training_days, mc_rep)
+y_axis4 = as.vector(portfolio_Returns_100_m4-1)
+plot_data4 = data.frame(x_axis, y_axis4)
+mc4 <- ggplot(data = plot_data4, aes(x = x_axis, y = y_axis4)) + geom_path(col = 'black', size = 0.1) +
+  xlab('Days') + ylab('Portfolio Returns') + 
+  ggtitle('Oil & Gas')+
+  theme(plot.title = element_text(hjust = 0.5))
+mc4
+
+# Porfolio Returns statistics on the 30th day.
+Avg_Portfolio_Returns4 = mean(portfolio_Returns_100_m4[100,]-1)
+SD_Portfolio_Returns4 = sd(portfolio_Returns_100_m4[100,]-1)
+Median_Portfolio_Returns4 = median(portfolio_Returns_100_m4[100,]-1)
+print(c(Avg_Portfolio_Returns4,SD_Portfolio_Returns4,Median_Portfolio_Returns4))
+
+# calculating the standard error
+sample.n4 <- length(portfolio_Returns_100_m4[100,]-1)
+sample.se4 <-SD_Portfolio_Returns4/sqrt(sample.n4)
+print(sample.se4)
+
+# calculating the t score
+
+#alpha = 0.05
+degrees.freedom4 = sample.n4 - 1
+t.score4 = qt(p=alpha/2, df=degrees.freedom4, lower.tail=F)
+
+print(t.score4)
+
+# Marging of error
+
+margin.error4 <- t.score4 * sample.se4
+
+# confidence +-
+
+lower.bound4 <- Avg_Portfolio_Returns4 - margin.error4
+upper.bound4 <- Avg_Portfolio_Returns4 + margin.error4
+
+print(c(lower.bound4, upper.bound4))
+
+#banking
+
+jp_morgan <- getSymbols("JPM", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+boa <- getSymbols("BAC", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+citi <- getSymbols("C", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+credit_suisse <- getSymbols("CS", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+
+stock_data5 <- data.frame(jp_morgan$`JPM.Close`, boa$`BAC.Close`, citi$`C.Close`, credit_suisse$`CS.Close`)
+stock_Price5 = as.matrix( stock_data5[ , 1:4] )
+
+
+# Get the Stock Returns
+stock_Returns5 = returns(stock_Price5)
+
+# Produce interactive chart of stock returns
+cinco <- dygraph(stock_Returns5, main = "") %>%
+  dyAxis("y", label = "Return", valueRange = c(-1,0.5)) %>%
+  dyRangeSelector(dateWindow = c("2022-10-01", "2022-12-30")) %>%
+  dyOptions(colors = RColorBrewer::brewer.pal(4, "Set2"))
+
+M5 <-cor(stock_Returns5)
+M5
+
+# Monte Carlo 5
+
+# Suppose we invest our money evenly among all four assets 
+# We use the prices to find the number of shares each stock that we buy
+portfolio_Weights5 = t(as.matrix(rep(1/ncol(stock_Returns5), ncol(stock_Returns5))))
+print(portfolio_Weights5)
+
+# Get the Variance Covariance Matrix of Stock Returns
+coVarMat5 = cov(stock_Returns5)
+miu5 = colMeans(stock_Returns5)
+# Extend the vector to a matrix
+Miu5 = matrix(rep(miu5, training_days), nrow = 4)
+
+# Initializing simulated 110 day portfolio returns
+portfolio_Returns_100_m5 = matrix(0, training_days, mc_rep)
+
+#set.seed(200)
+for (i in 1:mc_rep) {
+  Z5 = matrix ( rnorm( dim(stock_Returns5)[2] * training_days ), ncol = training_days )
+  # Lower Triangular Matrix from our Choleski Factorization
+  L5 = t( chol(coVarMat5) )
+  # Calculate stock returns for each day
+  daily_Returns5 = Miu5 + L5 %*% Z5  
+  # Calculate portfolio returns for 100 days
+  portfolio_Returns_100e = cumprod( portfolio_Weights5 %*% daily_Returns5 + 1 )
+  # Add it to the monte-carlo matrix
+  portfolio_Returns_100_m5[,i] = portfolio_Returns_100e;
+}
+
+# Visualising result
+x_axis = rep(1:training_days, mc_rep)
+y_axis5 = as.vector(portfolio_Returns_100_m5-1)
+plot_data5 = data.frame(x_axis, y_axis5)
+mc5 <- ggplot(data = plot_data5, aes(x = x_axis, y = y_axis5)) + geom_path(col = 'darkcyan', size = 0.1) +
+  xlab('Days') + ylab('Portfolio Returns') + 
+  ggtitle('banking')+
+  theme(plot.title = element_text(hjust = 0.5))
+mc5
+
+# Porfolio Returns statistics on the 30th day.
+Avg_Portfolio_Returns5 = mean(portfolio_Returns_100_m5[100,]-1)
+SD_Portfolio_Returns5 = sd(portfolio_Returns_100_m5[100,]-1)
+Median_Portfolio_Returns5 = median(portfolio_Returns_100_m5[100,]-1)
+print(c(Avg_Portfolio_Returns5,SD_Portfolio_Returns5,Median_Portfolio_Returns5))
+
+# calculating the standard error
+sample.n5 <- length(portfolio_Returns_100_m5[100,]-1)
+sample.se5 <-SD_Portfolio_Returns5/sqrt(sample.n5)
+print(sample.se5)
+
+# calculating the t score
+
+#alpha = 0.05
+degrees.freedom5 = sample.n5 - 1
+t.score5 = qt(p=alpha/2, df=degrees.freedom5, lower.tail=F)
+
+print(t.score5)
+
+# Marging of error
+
+margin.error5 <- t.score5 * sample.se5
+
+# confidence +-
+
+lower.bound5 <- Avg_Portfolio_Returns5 - margin.error5
+upper.bound5 <- Avg_Portfolio_Returns5 + margin.error5
+
+print(c(lower.bound5, upper.bound5))
+
+#business services
+
+visa <- getSymbols("V", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+master_card <- getSymbols("MA", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+amex <- getSymbols("AXP", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+cap_one <- getSymbols("COF", src = "yahoo", from = "2022-10-01", to = "2022-12-30", auto.assign = FALSE, na.omit("n/a"))
+
+stock_data6 <- data.frame(visa$`V.Close`, master_card$`MA.Close`, amex$`AXP.Close`, cap_one$`COF.Close`)
+stock_Price6 = as.matrix( stock_data6[ , 1:4] )
+
+
+# Get the Stock Returns
+stock_Returns6 = returns(stock_Price6)
+
+# Produce interactive chart of stock returns
+six <- dygraph(stock_Returns6, main = "") %>%
+  dyAxis("y", label = "Return", valueRange = c(-1,0.5)) %>%
+  dyRangeSelector(dateWindow = c("2022-10-01", "2022-12-30")) %>%
+  dyOptions(colors = RColorBrewer::brewer.pal(4, "Set2"))
+
+M6 <-cor(stock_Returns6)
+M6
+
+# Monte Carlo 6
+
+# Suppose we invest our money evenly among all four assets 
+# We use the prices to find the number of shares each stock that we buy
+portfolio_Weights6 = t(as.matrix(rep(1/ncol(stock_Returns6), ncol(stock_Returns6))))
+print(portfolio_Weights6)
+
+# Get the Variance Covariance Matrix of Stock Returns
+coVarMat6 = cov(stock_Returns6)
+miu6 = colMeans(stock_Returns6)
+# Extend the vector to a matrix
+Miu6 = matrix(rep(miu6, training_days), nrow = 4)
+
+# Initializing simulated 110 day portfolio returns
+portfolio_Returns_100_m6 = matrix(0, training_days, mc_rep)
+
+#set.seed(200)
+for (i in 1:mc_rep) {
+  Z6 = matrix ( rnorm( dim(stock_Returns6)[2] * training_days ), ncol = training_days )
+  # Lower Triangular Matrix from our Choleski Factorization
+  L6 = t( chol(coVarMat6) )
+  # Calculate stock returns for each day
+  daily_Returns6 = Miu6 + L6 %*% Z6  
+  # Calculate portfolio returns for 100 days
+  portfolio_Returns_100f = cumprod( portfolio_Weights6 %*% daily_Returns6 + 1 )
+  # Add it to the monte-carlo matrix
+  portfolio_Returns_100_m6[,i] = portfolio_Returns_100f;
+}
+
+# Visualising result
+x_axis = rep(1:training_days, mc_rep)
+y_axis6 = as.vector(portfolio_Returns_100_m6-1)
+plot_data6 = data.frame(x_axis, y_axis6)
+mc6 <- ggplot(data = plot_data6, aes(x = x_axis, y = y_axis6)) + geom_path(col = 'slateblue4', size = 0.1) +
+  xlab('Days') + ylab('Portfolio Returns') + 
+  ggtitle('business services')+
+  theme(plot.title = element_text(hjust = 0.5))
+mc6
+
+# Porfolio Returns statistics on the 30th day.
+Avg_Portfolio_Returns6 = mean(portfolio_Returns_100_m6[100,]-1)
+SD_Portfolio_Returns6 = sd(portfolio_Returns_100_m6[100,]-1)
+Median_Portfolio_Returns6 = median(portfolio_Returns_100_m6[100,]-1)
+print(c(Avg_Portfolio_Returns6,SD_Portfolio_Returns6,Median_Portfolio_Returns6))
+
+# calculating the standard error
+sample.n6 <- length(portfolio_Returns_100_m6[100,]-1)
+sample.se6 <-SD_Portfolio_Returns6/sqrt(sample.n6)
+print(sample.se6)
+
+# calculating the t score
+
+#alpha = 0.05
+degrees.freedom6 = sample.n6 - 1
+t.score6 = qt(p=alpha/2, df=degrees.freedom, lower.tail=F)
+
+print(t.score6)
+
+# Marging of error
+
+margin.error6 <- t.score6 * sample.se6
+
+# confidence +-
+
+lower.bound6 <- Avg_Portfolio_Returns6 - margin.error6
+upper.bound6 <- Avg_Portfolio_Returns6 + margin.error6
+
+print(c(lower.bound6, upper.bound6))
+
+
+# Arranging all the MC simulations
+grid.arrange(mc1,mc2, mc3, mc4, mc5, mc6,  ncol= 3, nrow= 2,
+             bottom = '')
+
+
